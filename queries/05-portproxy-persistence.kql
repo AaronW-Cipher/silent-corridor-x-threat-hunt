@@ -1,1 +1,36 @@
+// Silent Corridor X - Portproxy Persistence
+// Purpose: Identify netsh portproxy commands and related registry persistence.
 
+SilentCorridorX_CL
+| where DeviceName in ("WS-ENG04", "SRV-DC01")
+| extend Time = todatetime(EventTime)
+| where ProcessCommandLine has_any (
+    "netsh",
+    "portproxy",
+    "listenaddress",
+    "listenport",
+    "connectaddress",
+    "connectport"
+)
+or RegistryKey has "PortProxy"
+or RegistryValueData has_any (
+    "SRV-DC01",
+    "10.1.36.210",
+    "8443",
+    "9999",
+    "445"
+)
+| project
+    Time,
+    MdeTable,
+    DeviceName,
+    AccountName,
+    ActionType,
+    FileName,
+    ProcessCommandLine,
+    RegistryKey,
+    RegistryValueName,
+    RegistryValueData,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine
+| order by Time asc
