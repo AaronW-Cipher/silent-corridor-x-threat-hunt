@@ -1,13 +1,42 @@
-# Silent Corridor X Threat Hunt Report  
-## Credential Theft, Lateral Movement, Persistence, Data Exfiltration, and Cleanup Investigation
+# Silent Corridor X Threat Hunt
+
+## Project Overview
+
+This project documents a Microsoft Sentinel threat hunt investigating a simulated multi-stage intrusion involving compromised VPN access, WMI lateral movement, Active Directory credential theft, portproxy persistence, sensitive data staging, external exfiltration, and cleanup activity.
+
+The investigation was performed using KQL against centralized telemetry from process, file, registry, network, VPN, and Sysmon-style event data.
+
+---
 
 ## Executive Summary
 
-This threat hunt investigated a multi-stage intrusion across Windows endpoint, VPN, file, registry, process, and network telemetry. The attacker used the compromised account `s.brandt` for VPN access and beachhead activity, then used `m.richter` credentials for lateral movement. The investigation identified three compromised hosts: `WS-ENG04`, `SRV-DC01`, and `SRV-FILES02`.
+The investigation identified a multi-host intrusion involving compromised accounts `s.brandt` and `m.richter`. The attacker used `s.brandt` for VPN and beachhead access, then used `m.richter` credentials for lateral movement.
 
-The attacker performed reconnaissance, credential discovery, lateral movement, Active Directory credential theft, data staging, compression, encoding, exfiltration, persistence, and cleanup. Sensitive engineering data from `C:\Engineering\Avionics\A400M_NavSys` was compressed into `win_update_kb5034.zip`, encoded with `certutil.exe` into `win_update_kb5034.b64`, and exfiltrated to `cdn-telemetry.cloud-endpoint.net` using PowerShell `Invoke-WebRequest`.
+The affected hosts were:
 
-Persistence was established through `netsh interface portproxy` rules on compromised systems. The attacker later returned after two days to clear logs and remove staging artifacts, but centralized telemetry from `Microsoft-Windows-Sysmon/Operational` preserved enough evidence to reconstruct the intrusion.
+- `WS-ENG04`
+- `SRV-DC01`
+- `SRV-FILES02`
+
+The attacker extracted `ntds.dit` and `SYSTEM` from the domain controller, staged sensitive engineering data from `C:\Engineering\Avionics\A400M_NavSys`, compressed it into `win_update_kb5034.zip`, encoded it with `certutil.exe`, and exfiltrated it to `cdn-telemetry.cloud-endpoint.net` using PowerShell `Invoke-WebRequest`.
+
+Persistence was established using `netsh interface portproxy` rules on compromised hosts. The attacker later returned to clear logs and remove staging artifacts, but centralized telemetry from `Microsoft-Windows-Sysmon/Operational` preserved the evidence.
+
+---
+
+## Skills Demonstrated
+
+- Microsoft Sentinel threat hunting
+- KQL query development
+- VPN and endpoint telemetry correlation
+- Windows process, file, registry, and network event analysis
+- WMI lateral movement investigation
+- Active Directory credential theft analysis
+- Portproxy persistence analysis
+- Data staging and exfiltration investigation
+- MITRE ATT&CK mapping
+- Incident containment recommendations
+- Executive incident reporting
 
 ---
 
@@ -23,20 +52,20 @@ Persistence was established through `netsh interface portproxy` rules on comprom
 | DeviceFileEvents | File creation, staging, and artifact tracking |
 | DeviceNetworkEvents | Network connection and RDP scope analysis |
 | DeviceRegistryEvents | Persistence and configuration change analysis |
-| Microsoft-Windows-Sysmon/Operational | Surviving telemetry source after Security log clearing |
+| Microsoft-Windows-Sysmon/Operational | Surviving telemetry after Security log clearing |
 
 ---
 
-## Compromised Accounts
+## Investigation Scope
+
+### Compromised Accounts
 
 | Account | Role in Attack |
 |---|---|
-| `s.brandt` | VPN access, beachhead activity, initial compromised account |
+| `s.brandt` | VPN access and beachhead activity |
 | `m.richter` | Credential used for lateral movement and remote execution |
 
----
-
-## Compromised Hosts
+### Compromised Hosts
 
 | Host | Role |
 |---|---|
@@ -46,21 +75,31 @@ Persistence was established through `netsh interface portproxy` rules on comprom
 
 ---
 
-# Flag Walkthrough
+## Attack Timeline
 
-## Q00 — Data Source Identification
+| Phase | Activity |
+|---|---|
+| Initial Access | VPN access using `s.brandt` |
+| Discovery | System information and privileged group enumeration |
+| Credential Discovery | LSASS check, SAM targeting, saved credential enumeration |
+| Lateral Movement | WMI remote execution using `m.richter` |
+| Domain Controller Access | `SRV-DC01` targeted |
+| Credential Theft | `ntds.dit` and `SYSTEM` staged |
+| Persistence | `netsh interface portproxy` rules created |
+| File Server Targeting | `SRV-FILES02` accessed |
+| Data Staging | `C:\Engineering\Avionics\A400M_NavSys` compressed |
+| Encoding | Archive encoded with `certutil.exe` |
+| Exfiltration | Base64 file POSTed to external domain |
+| Reentry | Attacker returned after 2 days |
+| Cleanup | Security logs cleared and staging artifacts removed |
 
-### Objective
+---
 
-Identify the primary data source used for the investigation.
+# Key Findings
 
-### Method
+## Initial Access and VPN Activity
 
-I reviewed the query environment and confirmed the custom log table used throughout the hunt.
-
-### Evidence
-
-All investigation activity was queried from the centralized table:
+The attacker used VPN access associated with `s.brandt`. VPN telemetry showed suspicious remote IPs and tunnel activity. The key tunnel used during the pivot was:
 
 ```text
-SilentCorridorX_CL
+10.1.96.114
