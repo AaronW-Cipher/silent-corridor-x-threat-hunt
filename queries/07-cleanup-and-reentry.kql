@@ -1,1 +1,39 @@
+// Silent Corridor X - Cleanup and Reentry
+// Purpose: Identify reentry activity, event log clearing, direct vs remote cleanup, and staging artifact removal.
 
+SilentCorridorX_CL
+| where DeviceName in ("WS-ENG04", "SRV-DC01", "SRV-FILES02")
+| extend Time = todatetime(EventTime)
+| where ProcessCommandLine has_any (
+    "wevtutil",
+    "cl Security",
+    "Clear-EventLog",
+    "Remove-EventLog",
+    "rmdir",
+    "rd ",
+    "McAfee_Logs"
+)
+or InitiatingProcessCommandLine has_any (
+    "wevtutil",
+    "cl Security",
+    "rmdir",
+    "McAfee_Logs"
+)
+| extend CleanupType = case(
+    InitiatingProcessFileName =~ "WmiPrvSE.exe", "Remote cleanup via WMI",
+    ProcessCommandLine has "wevtutil", "Event log clearing",
+    ProcessCommandLine has_any ("rmdir", "rd "), "Artifact removal",
+    "Other cleanup activity"
+)
+| project
+    Time,
+    MdeTable,
+    DeviceName,
+    AccountName,
+    CleanupType,
+    FileName,
+    FullCommand = ProcessCommandLine,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine,
+    InitiatingProcessAccountName
+| order by Time asc
