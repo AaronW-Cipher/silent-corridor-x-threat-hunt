@@ -1,1 +1,39 @@
+// Silent Corridor X - File Server Staging and Exfiltration
+// Purpose: Identify compression, encoding, and outbound transfer of sensitive engineering data.
 
+SilentCorridorX_CL
+| extend Time = todatetime(EventTime)
+| where DeviceName in ("SRV-FILES02", "WS-ENG04")
+| where ProcessCommandLine has_any (
+    "Compress-Archive",
+    "A400M_NavSys",
+    "win_update_kb5034.zip",
+    "win_update_kb5034.b64",
+    "certutil",
+    "-encode",
+    "Invoke-WebRequest",
+    "cdn-telemetry.cloud-endpoint.net",
+    "-Method POST",
+    "-InFile"
+)
+or FileName has_any (
+    "certutil.exe",
+    "powershell.exe",
+    "win_update_kb5034.zip",
+    "win_update_kb5034.b64"
+)
+| extend ExfilDomain = extract(@"https?://([^/""\s]+)", 1, ProcessCommandLine)
+| project
+    Time,
+    MdeTable,
+    DeviceName,
+    AccountName,
+    ActionType,
+    FileName,
+    FolderPath,
+    ExfilDomain,
+    ProcessCommandLine,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine,
+    InitiatingProcessAccountName
+| order by Time asc
