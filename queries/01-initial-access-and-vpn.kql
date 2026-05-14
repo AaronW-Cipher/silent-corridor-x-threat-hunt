@@ -1,0 +1,13 @@
+// Silent Corridor X - Initial Access and VPN Correlation
+// Purpose: Identify VPN activity, suspicious remote IPs, tunnel assignments, and account activity.
+
+SilentCorridorX_CL
+| where MdeTable == "FortiGateVPN"
+| extend Time = todatetime(EventTime)
+| project
+    Time,
+    AccountName,
+    RemoteIP,
+    TunnelIP,
+    ActionType
+| order by Time asc
