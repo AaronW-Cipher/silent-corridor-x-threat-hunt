@@ -1,1 +1,39 @@
+// Silent Corridor X - Lateral Movement
+// Purpose: Identify WMI lateral movement from WS-ENG04 to internal servers using m.richter credentials.
 
+SilentCorridorX_CL
+| where MdeTable == "DeviceProcessEvents"
+| where DeviceName in ("WS-ENG04", "SRV-DC01", "SRV-FILES02")
+| extend Time = todatetime(EventTime)
+| where ProcessCommandLine has_any (
+    "wmic",
+    "/node:",
+    "/user:",
+    "SRV-DC01",
+    "SRV-FILES02",
+    "net use",
+    "\\\\SRV-"
+)
+or InitiatingProcessFileName =~ "WmiPrvSE.exe"
+| extend TargetHost = coalesce(
+    extract(@"/node:""([^""]+)""", 1, ProcessCommandLine),
+    extract(@"\\\\([^\\]+)\\", 1, ProcessCommandLine),
+    extract(@"SRV-[A-Z0-9]+", 0, ProcessCommandLine)
+)
+| extend UserUsed = coalesce(
+    extract(@"/user:""([^""]+)""", 1, ProcessCommandLine),
+    extract(@"/user:([^ ]+)", 1, ProcessCommandLine)
+)
+| extend UserUsed = trim(@'"', UserUsed)
+| project
+    Time,
+    DeviceName,
+    AccountName,
+    FileName,
+    TargetHost,
+    UserUsed,
+    ProcessCommandLine,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine,
+    InitiatingProcessAccountName
+| order by Time asc
